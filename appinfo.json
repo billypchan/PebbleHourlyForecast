@@ -1,64 +1,70 @@
 {
     "appKeys": {
+    "KEY_DEGREE": 1,
+        "KEY_CONDITION": 2,
         "KEY_ARRAY_CONDITION": 6,
         "KEY_ARRAY_POP": 9,
         "KEY_ARRAY_TEMPERATURE": 5,
         "KEY_ARRAY_TIME": 7,
         "KEY_ARRAY_WINDSPD": 8,
         "KEY_CITY": 10,
-        "KEY_CONDITIONS": 1,
-        "KEY_FEELS_LIKE": 2,
         "KEY_TEMPERATURE": 0,
-        "KEY_WIND_DEG": 4,
-        "KEY_WIND_GUST": 3
+    "KEY_WIND_DEG": 4,
+        "KEY_WIND": 3,
+    "KEY_COLOR": 11,
+    "KEY_POP": 12
     },
     "capabilities": [
         "location",
         "configurable"
     ],
     "companyName": "bill.chan",
-    "longName": "Hourly forecast",
+  "longName": "Hourly forecast 2",
     "projectType": "native",
     "resources": {
         "media": [
             {
-                "file": "images/menu image_28px.png",
-                "menuIcon": true,
-                "name": "IMAGE_MENU_IMAGE",
-                "type": "png"
+        "file": "images/menu image_28px.png",
+        "menuIcon": true,
+        "name": "IMAGE_MENU_IMAGE",
+        "type": "png"
+      },
+            {
+                "characterRegex": "[0-9a-zA-Z!?]",
+                "file": "fonts/weatherIcon_windMoon.ttf",
+                "name": "FONT_WEATHER_WIND_MOON_15",
+                "type": "font"
+            },
+      {
+        "characterRegex": "[0-9a-zA-Z]",
+        "file": "fonts/weatherIcon.ttf",
+        "name": "FONT_WEATHER_15",
+                "type": "font"
             },
             {
-                "characterRegex": "[0-9a-zA-Z]",
+                "characterRegex": "[0-9a-zA-Z!?]",
                 "file": "fonts/weatherIcon.ttf",
-                "name": "FONT_WEATHER_15",
+                "name": "FONT_WEATHER_40",
                 "type": "font"
             },
             {
-                "compatibility": "2.7",
-                "file": "fonts/perfect-dos-vga.ttf",
-                "name": "FONT_PERFECT_DOS_48",
-                "type": "font"
-            },
-            {
-                "compatibility": "2.7",
-                "file": "fonts/perfect-dos-vga.ttf",
-                "name": "FONT_PERFECT_DOS_20",
-                "type": "font"
-            },
-            {
-                "characterRegex": "[0-9.:%]",
-                "file": "fonts/perfect-dos-vga.ttf",
-                "name": "FONT_PERFECT_DOS_16",
+        "compatibility": "2.7",
+        "file": "fonts/perfect-dos-vga.ttf",
+        "name": "FONT_PERFECT_DOS_44",
                 "type": "font"
             }
         ]
     },
-    "sdkVersion": "2",
-    "shortName": "Hr. Forecast",
-    "uuid": "17362e22-9aae-40a0-98cf-b5c3f6595c38",
-    "versionCode": 1,
-    "versionLabel": "1.0",
-    "watchapp": {
-        "watchface": true
-    }
+    "sdkVersion": "3",
+  "shortName": "Hr forecast 2",
+  "uuid": "570f0a85-604a-47be-b278-824f0817f954",
+  "versionCode": 1,
+  "versionLabel": "2.6",
+  "watchapp": {
+    "watchface": true
+  },
+    "targetPlatforms": [
+        "aplite",
+        "basalt"
+  ]
 }
