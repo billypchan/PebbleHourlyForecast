@@ -12,14 +12,15 @@
     "KEY_WIND_DEG": 4,
         "KEY_WIND": 3,
     "KEY_COLOR": 11,
-    "KEY_POP": 12
+    "KEY_POP": 12,
+    "KEY_MOON": 13
     },
     "capabilities": [
         "location",
         "configurable"
     ],
     "companyName": "bill.chan",
-  "longName": "Hourly forecast 2",
+  "longName": "Hourly forecast 3",
     "projectType": "native",
     "resources": {
         "media": [
@@ -35,6 +36,12 @@
                 "name": "FONT_WEATHER_WIND_MOON_15",
                 "type": "font"
             },
+            {
+                "characterRegex": "[0-9a-zA-Z!?]",
+                "file": "fonts/weatherIcon_windMoon.ttf",
+                "name": "FONT_WEATHER_WIND_MOON_33",
+                "type": "font"
+            },
       {
         "characterRegex": "[0-9a-zA-Z]",
         "file": "fonts/weatherIcon.ttf",
@@ -48,18 +55,17 @@
                 "type": "font"
             },
             {
-        "compatibility": "2.7",
-        "file": "fonts/perfect-dos-vga.ttf",
-        "name": "FONT_PERFECT_DOS_44",
+                "file": "fonts/Hanken-Book.ttf",
+                "name": "FONT_HANKEN_BOOK_30",
                 "type": "font"
             }
         ]
     },
     "sdkVersion": "3",
-  "shortName": "Hr forecast 2",
-  "uuid": "570f0a85-604a-47be-b278-824f0817f954",
+  "shortName": "Hr forecast 3",
+  "uuid": "30af6dbc-39bb-4ee8-8501-d17eaba42bec",
   "versionCode": 1,
-  "versionLabel": "2.6",
+  "versionLabel": "3.7",
   "watchapp": {
     "watchface": true
   },

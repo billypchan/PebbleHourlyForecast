@@ -4,10 +4,11 @@
 // #define LOG_update_time
 // #define LOG_COLOR
 // #define LOG_POP
+
 // #define DEBUG_NO_NETWORK
 //#define DEBUG_FETCH_MORE
 
-//#define DEBUG_POP
+// #define DEBUG_POP
 // #define DEBUG_POP_IN_ROW4
 
 #include <pebble.h>
@@ -23,6 +24,10 @@
 # define CONDITION_KEY 7
 # define WIND_COND_KEY 8
 # define POP_KEY 9
+
+///setting and buf
+# define MOON_KEY 100
+# define POP_SETTING_KEY 101
 
 #define DEVICE_KEY 10
 
@@ -40,6 +45,7 @@
 #define KEY_CITY 10
 #define KEY_COLOR 11
 #define KEY_POP 12
+#define KEY_MOON 13
 
 #define NUM_HOURLY_FORECAST 6
 
@@ -66,6 +72,7 @@ persist_months_lang lang_months = {
 
 static int device_key = 1;
 static bool color_key = true; ///1 is black
+
 static int pop_key = 2; ///1 is black
 
 static bool isShowPop = false; ///flag for switch icon/pop in every minute
@@ -83,15 +90,16 @@ static char * ar_cond[NUM_HOURLY_FORECAST];
 static char * ar_pop[NUM_HOURLY_FORECAST];
 static char * ar_time[NUM_HOURLY_FORECAST];
 static char * ar_wspd[NUM_HOURLY_FORECAST];
-// static char * ar_pop[NUM_HOURLY_FORECAST];
 
 ///buf for current condition
 //   static char weather_layer_buffer[80];///3 lines of text, 32 is not enough
 ///current condition buffer
 static char temperature_buffer[80];///for local storage caching
-static char degree_buffer[10];
+static char degree_buffer[20];
 static char condition_buffer[10];
 static char wind_buffer[20];
+
+static char moon_buffer[3];
 
 ///buffer for text drawing
 static char buf[5];
@@ -104,6 +112,8 @@ static int isHourlyTime = 0;
 #define DEVICE_WIDTH        144
 #define DEVICE_HEIGHT       168
 
+#define W_MOON 35
+
 #define LAYOUT_SLOT_TOP      -1
 #define LAYOUT_SLOT_HEIGHT   60
 
@@ -112,6 +122,11 @@ static Window *s_main_window;
 
 ///layer to show the clock
 static TextLayer *s_time_layer;
+static TextLayer *s_time_min_layer;
+
+static TextLayer *s_moon_layer;
+static TextLayer *s_moon_bg_layer;
+static TextLayer *s_moon_mask_layer;
 
 static TextLayer *s_date_layer;
 ///layer below time
@@ -127,16 +142,39 @@ static TextLayer *s_wind_layer;
 ///layer for top panel
 static Layer *slot_top;
 
-static GFont s_time_font;
 static GFont s_icon_font;
 static GFont s_icon_font_main;
 static GFont s_icon_font_windmoon;
+static GFont s_icon_font_moon;
+
+static GFont s_font_degree;
 
 static void updateArray(char * ar[], char buf[]);
 static bool removeBufferFirstItem(char buf[]);
 static bool readRemoveWriteUpdate();
 
 struct tm *currentTime;
+
+static void updatePop()
+{
+#ifdef DEBUG_POP
+  APP_LOG(APP_LOG_LEVEL_INFO, "updatePop() - pop_key %d", pop_key);
+#endif
+  
+  if(pop_key == 1)
+  {
+    isShowPop = true;
+  }
+  else if(pop_key == 2)
+  {
+    ///do not change the value
+  }
+  else if(pop_key == 3)
+  {
+    isShowPop = false;
+  }
+}
+
 
 static void setLayerColor(TextLayer *layer, int color_key)
 {
@@ -184,23 +222,33 @@ static void update_time() {
   struct tm *tick_time = localtime(&temp);
   
   // Create a long-lived buffer
-  static char buffer[] = "00:00";
+  static char buffer[] = "00";
+  static char bufferMin[] = "00";
   
   // Write the current hours and minutes into the buffer
   if (clock_is_24h_style() == true) {
     //Use 2h hour format
-    strftime(buffer, sizeof("00:00"), "%H:%M", tick_time);
+    strftime(buffer, sizeof("00"), "%H", tick_time);
   } else {
     //Use 12 hour format
-    strftime(buffer, sizeof("00:00"), "%I:%M", tick_time);
+    strftime(buffer, sizeof("00"), "%I", tick_time);
   }
-  
   // Display this time on the TextLayer
   text_layer_set_text(s_time_layer, buffer);
+  
+  ////////////
+  strftime(bufferMin, sizeof("00"), "%M", tick_time);///TODO: 00 bug?
+  // Display this time on the TextLayer
+  text_layer_set_text(s_time_min_layer, bufferMin);
+  
   
 #ifdef LOG_update_time
   APP_LOG(APP_LOG_LEVEL_INFO, "update_time ends");
 #endif
+  
+  ///cover the time layer
+  text_layer_set_text(s_moon_layer, moon_buffer);
+  
 }
 
 void setColors(GContext* ctx) {
@@ -224,6 +272,7 @@ void setInvColors(GContext* ctx) {
 #define CAL_HEIGHT 82  // How tall rows should be depends on how many weeks there are
 
 static void rect_layer_update_callback(Layer *layer, GContext *ctx) {
+  
 #ifdef LOG_rect_layer_update_callback
   APP_LOG(APP_LOG_LEVEL_INFO, "rect_layer_update_callback start");
 #endif
@@ -288,7 +337,8 @@ static void rect_layer_update_callback(Layer *layer, GContext *ctx) {
       iPop = 100;
 #endif
       
-      if(iPop > 0 && ar_pop[col])
+      ///ignore < 10% pop
+      if(iPop > 10 && ar_pop[col])
       {
         ///debug digits
 #ifdef DEBUG_POP
@@ -297,20 +347,9 @@ static void rect_layer_update_callback(Layer *layer, GContext *ctx) {
         snprintf(buf, sizeof(buf), "%s%%", ar_pop[col]);
 #endif
         
-        if(pop_key == 1)
-        {
-          isShowPop = true;
-        }
-        else if(pop_key == 2)
-        {
-          ///do not change the value
-        }
-        else if(pop_key == 3)
-        {
-          isShowPop = false;
-        }
-        
+#ifdef DEBUG_POP
         APP_LOG(APP_LOG_LEVEL_ERROR, "isShowPop %d", isShowPop);
+#endif
         
         if(isShowPop)
         {
@@ -348,7 +387,7 @@ static void rect_layer_update_callback(Layer *layer, GContext *ctx) {
                                GTextOverflowModeFill, GTextAlignmentCenter, NULL);
           }
         }
-      }
+      }///end of pop
       else
       {
         ///weather icon
@@ -433,28 +472,119 @@ static void updateDate()
 #endif
 }
 
+
+static void adjustDegFont()
+{
+  if (strlen(degree_buffer) >= 7)
+  {
+    ///2 lines
+    text_layer_set_font(s_tempDeg_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  }
+  else if (strlen(degree_buffer) >= 5)///100 deg F with eod
+  {
+    ///2 lines
+    text_layer_set_font(s_tempDeg_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+  }
+  else
+  {
+    text_layer_set_font(s_tempDeg_layer, s_font_degree);
+  }
+  
+}
+
 static void main_window_load(Window *window) {
-  isShowPop = false;
-  
-  // Create time TextLayer
-  s_time_layer = text_layer_create(GRect(5, Y_TIME_LBL+2, 139, HGH_TIME_LBL));
-  text_layer_set_background_color(s_time_layer, GColorClear);
-  
-  text_layer_set_text_color(s_time_layer, color_key ? GColorWhite : GColorBlack);
-  text_layer_set_text(s_time_layer, "00:00");
-  
   //Create GFont
-  s_time_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_PERFECT_DOS_44));
   s_icon_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_15));
   s_icon_font_main = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_40));
-  s_icon_font_windmoon = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_WIND_MOON_15));
   
+  s_icon_font_windmoon = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_WIND_MOON_15));
+  s_icon_font_moon = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_WIND_MOON_33));
+  
+  s_font_degree = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_HANKEN_BOOK_30));
+
+  int w_time = (DEVICE_WIDTH - W_MOON) / 2;
+  
+  // APP_LOG(APP_LOG_LEVEL_INFO, "w_time %d", w_time);
+  // APP_LOG(APP_LOG_LEVEL_INFO, "W_MOON %d", W_MOON);
+  
+  // Create time TextLayer
+  s_time_layer = text_layer_create(GRect(-1, Y_TIME_LBL+5,
+                                         w_time + 7, HGH_TIME_LBL));///TO prevent "box", w_time + 5 is needed
+  text_layer_set_background_color(s_time_layer, GColorClear);
+  
+  text_layer_set_text(s_time_layer, "00");
   //Apply to TextLayer
-  text_layer_set_font(s_time_layer, s_time_font);
+  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
   
+  ////////
+  // Create time-min TextLayer
+  s_time_min_layer = text_layer_create(GRect(W_MOON + w_time-4, Y_TIME_LBL+5,
+                                             w_time + 5, HGH_TIME_LBL));
+  text_layer_set_background_color(s_time_min_layer, GColorClear);
+  
+  text_layer_set_text(s_time_min_layer, "00");
+  //Apply to TextLayer
+  text_layer_set_font(s_time_min_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
+  text_layer_set_text_alignment(s_time_min_layer, GTextAlignmentCenter);
+  
+  ////////////////////
+  int xMoon = w_time + 4;
+  int yMoon = Y_TIME_LBL+15;
+  int sz = W_MOON;///font size + 2 to prevent char not drawn issue
+  ///moon layer
+  s_moon_layer = text_layer_create(GRect(xMoon, yMoon, sz, sz));
+  text_layer_set_background_color(s_moon_layer, GColorClear);
+  // text_layer_set_background_color(s_moon_layer, GColorBlack);
+  
+  // text_layer_set_text_color(s_moon_layer, color_key ? GColorWhite : GColorBlack);
+  text_layer_set_text_color(s_moon_layer, GColorWhite);
+  //Apply to TextLayer
+  text_layer_set_font(s_moon_layer, s_icon_font_moon);
+  text_layer_set_text_alignment(s_moon_layer, GTextAlignmentCenter);
+  
+  text_layer_set_text(s_moon_layer, "a");
+  
+  
+  s_moon_bg_layer = text_layer_create(GRect(xMoon, yMoon, sz, sz));
+  text_layer_set_background_color(s_moon_bg_layer, GColorClear);
+  // text_layer_set_background_color(s_moon_layer, GColorBlack);
+  
+  // text_layer_set_text_color(s_moon_layer, color_key ? GColorWhite : GColorBlack);
+  text_layer_set_text_color(s_moon_bg_layer, GColorBlack);
+  //Apply to TextLayer
+  text_layer_set_font(s_moon_bg_layer, s_icon_font_moon);
+  text_layer_set_text_alignment(s_moon_bg_layer, GTextAlignmentCenter);
+  
+  text_layer_set_text(s_moon_bg_layer, "o");
+  
+  // text_layer_set_text_color(s_time_layer, color_key ? GColorWhite : GColorBlack);
+  // text_layer_set_text_color(s_time_min_layer, color_key ? GColorWhite : GColorBlack);
+  
+  setLayerColor(s_time_layer, color_key);
+  setLayerColor(s_time_min_layer, color_key);
+  
+  //////////
+  
+  s_moon_mask_layer = text_layer_create(GRect(xMoon, yMoon, sz, sz));
+  text_layer_set_background_color(s_moon_mask_layer, GColorClear);
+  // text_layer_set_background_color(s_moon_layer, GColorBlack);
+  
+  // text_layer_set_text_color(s_moon_layer, color_key ? GColorWhite : GColorBlack);
+  text_layer_set_text_color(s_moon_mask_layer, GColorBlack);
+  //Apply to TextLayer
+  text_layer_set_font(s_moon_mask_layer, s_icon_font_moon);
+  text_layer_set_text_alignment(s_moon_mask_layer, GTextAlignmentCenter);
+  
+  text_layer_set_text(s_moon_mask_layer, "a");
+  
+  layer_set_hidden((Layer *)s_moon_mask_layer, color_key ? true : false);
+  
+  
+  //////////
+  
   ///city layer
-  s_city_layer = text_layer_create(GRect(5, DEVICE_HEIGHT - HGH_DATE_LBL +4, 139, HGH_DATE_LBL));
+  s_city_layer = text_layer_create(GRect(0, DEVICE_HEIGHT - HGH_DATE_LBL +4, DEVICE_WIDTH, HGH_DATE_LBL));
   
   setLayerColor(s_city_layer, color_key);
   text_layer_set_background_color(s_city_layer, GColorClear);
@@ -481,6 +611,11 @@ static void main_window_load(Window *window) {
   
   // Add it as a child layer to the Window's root layer
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_layer));
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_min_layer));
+  
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_moon_bg_layer));
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_moon_layer));
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_moon_mask_layer));
   
   // Create weather Layer
   int y_weather = 112;
@@ -491,15 +626,18 @@ static void main_window_load(Window *window) {
   int hgh = DEVICE_HEIGHT - y_weather;
   int y = y_weather - HGH_DATE_LBL;
   
-  s_tempDeg_layer = text_layer_create(GRect(0, y+16, width, hgh));
+  s_tempDeg_layer = text_layer_create(GRect(-1  , y+16, 
+    width+8, ///for bigger font, 5 is not enough, 10 is too much, touched the icon
+   hgh));
+
   text_layer_set_background_color(s_tempDeg_layer, GColorClear);
   text_layer_set_text_color(s_tempDeg_layer, color_key ? GColorWhite : GColorBlack);
   text_layer_set_text_alignment(s_tempDeg_layer, GTextAlignmentCenter);
   // Create second custom font, apply it and add to Window
-  text_layer_set_font(s_tempDeg_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));///FONT_KEY_BITHAM_30_BLACK is too big for 20deg
+  //text_layer_set_font(s_tempDeg_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));///FONT_KEY_BITHAM_30_BLACK is too big for 20deg
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_tempDeg_layer));
   text_layer_set_text(s_tempDeg_layer, "?");
-  text_layer_set_overflow_mode(s_tempDeg_layer, GTextOverflowModeTrailingEllipsis);
+  text_layer_set_overflow_mode(s_tempDeg_layer, GTextOverflowModeFill);
   
   /////////////////
   s_condition_layer = text_layer_create(GRect(width-4, y+12, width+8, hgh+10));///expend 4 px for wider icon like nt_fog
@@ -552,6 +690,9 @@ static void main_window_load(Window *window) {
     persist_read_string(DEGREE_KEY, degree_buffer, sizeof(degree_buffer));
     text_layer_set_text(s_tempDeg_layer, degree_buffer);
   }
+  
+  adjustDegFont();
+  
   if (strlen(condition_buffer) <= 0)
   {
     persist_read_string(CONDITION_KEY, condition_buffer, sizeof(condition_buffer));
@@ -561,6 +702,14 @@ static void main_window_load(Window *window) {
   {
     persist_read_string(WIND_COND_KEY, wind_buffer, sizeof(wind_buffer));
     text_layer_set_text(s_wind_layer, wind_buffer);
+  }
+  if (strlen(moon_buffer) <= 0)
+  {
+    persist_read_string(MOON_KEY, moon_buffer, sizeof(moon_buffer));
+#ifdef LOG_MSG
+    APP_LOG(APP_LOG_LEVEL_INFO, "moon_buffer %s loaded", moon_buffer);
+#endif
+    text_layer_set_text(s_moon_layer, moon_buffer);
   }
   
 #ifdef LOG_MSG
@@ -619,6 +768,14 @@ static void main_window_load(Window *window) {
     updateArray(ar_pop, weather_ar_pop_buffer);
   }
   
+  
+  pop_key = persist_read_int(POP_SETTING_KEY);
+  
+  isShowPop = false;
+  
+  updatePop();
+  
+  
   ///app launch, check the cache is valid? Kill the old cache
   if (ar_time[0])
   {
@@ -649,13 +806,19 @@ static void main_window_load(Window *window) {
       snprintf(str, sizeof(str), " %d", hr);
       
       char * strSearch = strstr(weather_ar_hour_buffer, str);
+#ifdef LOG_MSG
       APP_LOG(APP_LOG_LEVEL_INFO, "str %s", str);
+#endif
       if (strSearch != NULL) {
         // contains
+#ifdef LOG_MSG
         APP_LOG(APP_LOG_LEVEL_INFO, "found cache! %s", str);
+#endif
         if (checkBufferWithLimit(strSearch, NUM_HOURLY_FORECAST - 1))
         {
+#ifdef LOG_MSG
           APP_LOG(APP_LOG_LEVEL_INFO, "enough items %s", strSearch);
+#endif
           ///keep remove first item til correct
           
           ///TODO: check it works?
@@ -678,13 +841,20 @@ static void main_window_load(Window *window) {
 
 static void main_window_unload(Window *window) {
   //Unload GFont, 88 bytes
-  fonts_unload_custom_font(s_time_font);
   fonts_unload_custom_font(s_icon_font);
   fonts_unload_custom_font(s_icon_font_main);
   fonts_unload_custom_font(s_icon_font_windmoon);
+  fonts_unload_custom_font(s_icon_font_moon);
+  fonts_unload_custom_font(s_font_degree);
   
+
   // Destroy TextLayer
   text_layer_destroy(s_time_layer);
+  text_layer_destroy(s_time_min_layer);
+  
+  text_layer_destroy(s_moon_layer);
+  text_layer_destroy(s_moon_bg_layer);
+  text_layer_destroy(s_moon_mask_layer);
   text_layer_destroy(s_date_layer);
   text_layer_destroy(s_city_layer);
   
@@ -696,7 +866,21 @@ static void main_window_unload(Window *window) {
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  isShowPop = !isShowPop;
+  
+  if(pop_key == 1)
+  {
+    isShowPop = true;
+  }
+  else if(pop_key == 2)
+  {
+    ///do not change the value
+    isShowPop = !isShowPop;
+  }
+  else if(pop_key == 3)
+  {
+    isShowPop = false;
+  }
+  
   
 #ifdef LOG_MSG
   APP_LOG(APP_LOG_LEVEL_INFO, "tick_handler starts");
@@ -938,19 +1122,33 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   
   // For all items
   while (t != NULL) {
+#ifdef LOG_MSG
+    APP_LOG(APP_LOG_LEVEL_INFO, "key %u received", (unsigned)(t->key));
+#endif
     // Which key was received?
     switch (t->key) {
       case KEY_TEMPERATURE:
         snprintf(temperature_buffer, sizeof(temperature_buffer), "%s", t->value->cstring);
         persist_write_string(USERNAME_KEY, temperature_buffer);
         break;
+        
       case KEY_DEGREE:
         snprintf(degree_buffer, sizeof(degree_buffer), "%s", t->value->cstring);
         persist_write_string(DEGREE_KEY, degree_buffer);
 #ifdef LOG_MSG
         APP_LOG(APP_LOG_LEVEL_INFO, "degree_buffer %s received", degree_buffer);
 #endif
+        adjustDegFont();
+        break;
         
+      case KEY_MOON:
+        snprintf(moon_buffer, sizeof(moon_buffer), "%s", t->value->cstring);
+        persist_write_string(MOON_KEY, moon_buffer);
+        text_layer_set_text(s_moon_layer, moon_buffer);
+        
+#ifdef LOG_MSG
+        APP_LOG(APP_LOG_LEVEL_INFO, "moon_buffer %s received", moon_buffer);
+#endif
         break;
         
       case KEY_CONDITION:
@@ -1033,21 +1231,33 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
         
         setLayerColor(s_date_layer, color_key);
         setLayerColor(s_time_layer, color_key);
+        setLayerColor(s_time_min_layer, color_key);
+        
+        setLayerColor(s_moon_layer, color_key);
         setLayerColor(s_city_layer, color_key);
         
         setLayerColor(s_tempDeg_layer, color_key);
         setLayerColor(s_condition_layer, color_key);
         setLayerColor(s_wind_layer, color_key);
         
+        layer_set_hidden((Layer *)s_moon_mask_layer, color_key ? true : false);
+        
+        // text_layer_set_text(s_moon_bg_layer, "o");
+        //     text_layer_set_text(s_moon_layer, moon_buffer);
+        //       text_layer_set_text(s_moon_mask_layer, "a");
+        
+        //     layer_set_hidden((Layer *)s_moon_layer, false);
+        
         break;
         
       case KEY_POP:
         pop_key = (int)t->value->int32;
-        persist_write_int(POP_KEY, pop_key);
+        persist_write_int(POP_SETTING_KEY, pop_key);
         
 #ifdef LOG_POP
         APP_LOG(APP_LOG_LEVEL_ERROR, "pop_key recived: %d", pop_key);
 #endif
+        updatePop();
         layer_mark_dirty(slot_top);
         
         break;
@@ -1069,8 +1279,12 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   text_layer_set_text(s_condition_layer, condition_buffer);
   text_layer_set_text(s_wind_layer, wind_buffer);
   
+  // text_layer_set_text(s_moon_layer, moon_buffer);
+  
+  text_layer_set_text_color(s_moon_layer, GColorWhite);
   
 #ifdef LOG_MSG
+  APP_LOG(APP_LOG_LEVEL_ERROR, "moon_buffer after setting: %s", moon_buffer);
   APP_LOG(APP_LOG_LEVEL_ERROR, "temperature_buffer: %s", temperature_buffer);
 #endif
 }
